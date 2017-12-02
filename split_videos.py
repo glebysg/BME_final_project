@@ -20,6 +20,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--input_file",
                     required=True, help=("full filepath including filename"
                     "to the .csv containing the annotated videos"))
+parser.add_argument("-d", "--data_path",
+                    required=True, help="path to the folder containing the annotated videos")
 parser.add_argument("-w", "--width",
                     required=True, type=int,
                     help="desired width of the output video")
