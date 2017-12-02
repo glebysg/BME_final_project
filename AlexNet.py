@@ -17,7 +17,7 @@ batch_size = 50
 learning_rate = 0.01
 
 # https://github.com/eladhoffer/convNet.pytorch/blob/master/models/alexnet.py
-class AlexNet(nn.Module):
+class AlexNetOWT_BN(nn.Module):
 
     def __init__(self, num_classes = 9):
         super(AlexNetOWT_BN, self).__init__()
