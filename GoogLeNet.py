@@ -9,14 +9,29 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.autograd import Variable
 
+#Hyper parameters
+learning_rate = 0.01
+momentum = 0.5
+epoch_count = 10
+num_classes = 8
+LSTM_hidden_layers = 32
+# batch_size = 1
+
 class MyGoogLeNet:
     def __init__(self,train_loader,test_loader,withPreloadModel,withCuda,withLSTM):
-        self.model = GoogLeNet()
+        self.model = GoogLeNet(withLSTM)
         self.withCuda = withCuda
+        self.withLSTM = withLSTM
+
+        if(self.withLSTM):
+            print("************ Using LSTM ************")
+        else:
+            print("************ Not Using LSTM ************")
 
         if(self.withCuda):
             self.model.cuda()
 
+        # Load the trained model
         if withPreloadModel:
             print("************ Loading Model ************")
             self.model.load_state_dict(torch.load('model/GoogLeNetModel'))
@@ -27,15 +42,20 @@ class MyGoogLeNet:
         self.errors = []
         self.epochs = []
         self.times = []
-        # self.totalCorrect = 0
 
-        self.optimizer = optim.SGD(self.model.parameters(), lr=0.01, momentum=0.5)
+        self.optimizer = optim.SGD(self.model.parameters(), learning_rate, momentum)
 
     def train(self):
         def innerTrain(epoch):
+            # Set the model to train
             self.model.train(True)
             correct = 0
+            # Reset the data pooling
+
+            # loop for as many examples
             for batch_idx, (data, target) in enumerate(self.train_loader):
+
+                # get the next data, target (as tensors)
 
                 # if (len(input.size()) == 1):
                 ## NOTE: reshape of torch
@@ -43,50 +63,89 @@ class MyGoogLeNet:
 
                 target = target.type(torch.LongTensor)
 
+                # Convert variables if you are using cuda
                 if(self.withCuda):
                     data, target = Variable(data.cuda()), Variable(target.cuda())
                 else:
                     data, target = Variable(data), Variable(target)
 
                 self.optimizer.zero_grad()
-                output = self.model(data)
 
-                loss = self.criterion(output, target)
-                pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
+                # For the LSTM approach,retrieve the last element of the output sequence
+                if(self.withLSTM):
+                    output_seq, _ = self.model(data)
+                    last_output = output_seq[-1]
+                    loss = self.criterion(last_output, target)
+                    pred = last_output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
+
+                # In the non-LSTM, use the whole output of the model
+                else:
+                    output = self.model(data)
+                    loss = self.criterion(output, target)
+                    pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
+
+                # Update the prediction values
                 correct += pred.eq(target.data.view_as(pred)).cpu().sum()
+
+                # Perform a backward propagation
                 loss.backward()
                 self.optimizer.step()
+
+            # Append the error obtained from this particular epoch
             self.errors.append(100-correct/float(len(self.train_loader)))
 
         start_time = time.time()
-        epoch_count = 10
+
+        # Iterate for all the epochs
         for current_epoch in range(1, epoch_count):
             self.epochs.append(current_epoch)
             innerTrain(current_epoch)
             print ('Train Epoch: {}, Time taken: {}'.format(current_epoch, (time.time() - start_time)))
             self.times.append(time.time() - start_time)
 
+        # Save the trained model
         torch.save(self.model.state_dict(), 'model/GoogLeNetModel')
 
         return self.epochs,self.errors,self.times
 
     def test(self):
+        # Set the model to test
         self.model.train(False)
         test_loss = 0
         correct = 0
+
+        # Reset the data pooling
+
+        # loop for as many examples
         for batch_idx, (data, target) in enumerate(self.test_loader):
+            # get the next data, target (as tensors)
+
             target = target.type(torch.LongTensor)
 
+            # Convert variables if you are using cuda
             if(self.withCuda):
                 data, target = Variable(data.cuda(), volatile=True), Variable(target.cuda(), volatile=True)
             else:
                 data, target = Variable(data, volatile=True), Variable(target, volatile=True)
 
-            output = self.model(data)
-            loss = self.criterion(output, target)
+            # For the LSTM approach,retrieve the last element of the output sequence
+            if(self.withLSTM):
+                output_seq, _ = self.model(data)
+                last_output = output_seq[-1]
+                loss = self.criterion(last_output, target)
+                pred = last_output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
+
+            # In the non-LSTM, use the whole output of the model
+            else:
+                output = self.model(data)
+                loss = self.criterion(output, target)
+                pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
+
+            # Update the prediction values
             test_loss += loss.data.cpu().numpy()[0]
-            pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
             correct += pred.eq(target.data.view_as(pred)).cpu().sum()
+
+        # Compute the final loss and the accuracy
         test_loss /= len(self.test_loader)
         accuracy = 100. * correct / (batch_idx+1)
 
@@ -95,6 +154,7 @@ class MyGoogLeNet:
 
         return test_loss, accuracy
 
+# Inception Module for the GoogLeNet
 class Inception(nn.Module):
     def __init__(self, in_planes, n1x1, n3x3red, n3x3, n5x5red, n5x5, pool_planes):
         super(Inception, self).__init__()
@@ -143,9 +203,10 @@ class Inception(nn.Module):
         y4 = self.b4(x)
         return torch.cat([y1,y2,y3,y4], 1)
 
-
+# GoogLeNet Module for pytorch
+# https://github.com/kuangliu/pytorch-cifar/blob/master/models/googlenet.py
 class GoogLeNet(nn.Module):
-    def __init__(self, num_classes = 8, hidden_layers=2):
+    def __init__(self,withLSTM):
         super(GoogLeNet, self).__init__()
         self.pre_layers = nn.Sequential(
             nn.Conv2d(3, 192, kernel_size=3, padding=1),
@@ -170,9 +231,13 @@ class GoogLeNet(nn.Module):
         self.b5 = Inception(832, 384, 192, 384, 48, 128, 128)
 
         self.avgpool = nn.AvgPool2d(56, stride=1)
+
+        # Final linear layer when not using LSTM
         self.linear = nn.Linear(1024, num_classes)
 
-        self.rnn = nn.LSTM(1024, num_classes, hidden_layers)
+        # Final LSTM layer when using LSTM
+        self.rnn = nn.LSTM(1024, num_classes, LSTM_hidden_layers)
+        self.withLSTM = withLSTM
 
     def forward(self, x):
         out = self.pre_layers(x)
@@ -188,9 +253,10 @@ class GoogLeNet(nn.Module):
         out = self.a5(out)
         out = self.b5(out)
         out = self.avgpool(out)
-        out = out.view(out.size(0), -1)
         if(self.withLSTM):
+            out = out.view(1, out.size(0), -1)
             out = self.rnn(out)
         else:
+            out = out.view(out.size(0), -1)
             out = self.linear(out)
         return out

@@ -1,23 +1,12 @@
-import pickle
-def load_obj(name):
-    with open(name + '.pkl', 'rb') as f:
-        return pickle.load(f)
+from DataPooling import DataPool
 
-o = (load_obj('out'))
-a = (load_obj('trainout'))
-b = (load_obj('testout'))
-print(len(o[3]))
-print(len(o[4]))
-print(len(o[9]))
-print(len(o[7]))
-print(o)
-print(len(a[3]))
-print(len(a[4]))
-print(len(a[9]))
-print(len(a[7]))
-print(a)
-print(len(b[3]))
-print(len(b[4]))
-print(len(b[9]))
-print(len(b[7]))
-print(b)
+data = DataPool('trainout',20)
+dict_obj = {2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0}
+while(True):
+    frame, label = data.nextImage()
+    if frame is  None:
+        print("GOT A NONE FRAME")
+        break
+    else:
+        dict_obj[label] += 1
+print(dict_obj)

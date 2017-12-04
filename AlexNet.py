@@ -9,14 +9,29 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.autograd import Variable
 
+#Hyper parameters
+learning_rate = 0.01
+momentum = 0.5
+epoch_count = 10
+num_classes = 8
+LSTM_hidden_layers = 32
+# batch_size = 1
+
 class MyAlexNet:
-    def __init__(self,train_loader,test_loader,withPreloadModel,withCuda):
-        self.model = AlexNet()
+    def __init__(self,train_loader,test_loader,withPreloadModel,withCuda,withLSTM):
+        self.model = AlexNet(withLSTM)
         self.withCuda = withCuda
+        self.withLSTM = withLSTM
+
+        if(self.withLSTM):
+            print("************ Using LSTM ************")
+        else:
+            print("************ Not Using LSTM ************")
 
         if(self.withCuda):
             self.model.cuda()
 
+        # Load the trained model
         if withPreloadModel:
             print("************ Loading Model ************")
             self.model.load_state_dict(torch.load('model/AlexNetModel'))
@@ -27,66 +42,110 @@ class MyAlexNet:
         self.errors = []
         self.epochs = []
         self.times = []
-        # self.totalCorrect = 0
 
-        self.optimizer = optim.SGD(self.model.parameters(), lr=0.01, momentum=0.5)
+        self.optimizer = optim.SGD(self.model.parameters(), learning_rate, momentum)
 
     def train(self):
         def innerTrain(epoch):
-            self.model.train()
+            # Set the model to train
+            self.model.train(True)
             correct = 0
+            # Reset the data pooling
+
+            # loop for as many examples
             for batch_idx, (data, target) in enumerate(self.train_loader):
 
+                # get the next data, target (as tensors)
+
                 # if (len(input.size()) == 1):
+                ## NOTE: reshape of torch
                 #     input = input.view(1, input.size()[0])
-                
+
                 target = target.type(torch.LongTensor)
 
+                # Convert variables if you are using cuda
                 if(self.withCuda):
-                    data, target = Variable(data.cuda(),), Variable(target.cuda())
+                    data, target = Variable(data.cuda()), Variable(target.cuda())
                 else:
                     data, target = Variable(data), Variable(target)
 
                 self.optimizer.zero_grad()
-                output = self.model(data)
 
-                loss = self.criterion(output, target)
-                pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
+                # For the LSTM approach,retrieve the last element of the output sequence
+                if(self.withLSTM):
+                    output_seq, _ = self.model(data)
+                    last_output = output_seq[-1]
+                    loss = self.criterion(last_output, target)
+                    pred = last_output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
+
+                # In the non-LSTM, use the whole output of the model
+                else:
+                    output = self.model(data)
+                    loss = self.criterion(output, target)
+                    pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
+
+                # Update the prediction values
                 correct += pred.eq(target.data.view_as(pred)).cpu().sum()
+
+                # Perform a backward propagation
                 loss.backward()
                 self.optimizer.step()
+
+            # Append the error obtained from this particular epoch
             self.errors.append(100-correct/float(len(self.train_loader)))
 
         start_time = time.time()
-        epoch_count = 10
+
+        # Iterate for all the epochs
         for current_epoch in range(1, epoch_count):
             self.epochs.append(current_epoch)
             innerTrain(current_epoch)
             print ('Train Epoch: {}, Time taken: {}'.format(current_epoch, (time.time() - start_time)))
             self.times.append(time.time() - start_time)
 
+        # Save the trained model
         torch.save(self.model.state_dict(), 'model/AlexNetModel')
 
         return self.epochs,self.errors,self.times
 
     def test(self):
+        # Set the model to test
         self.model.train(False)
         test_loss = 0
         correct = 0
+
+        # Reset the data pooling
+
+        # loop for as many examples
         for batch_idx, (data, target) in enumerate(self.test_loader):
+            # get the next data, target (as tensors)
+
             target = target.type(torch.LongTensor)
 
+            # Convert variables if you are using cuda
             if(self.withCuda):
                 data, target = Variable(data.cuda(), volatile=True), Variable(target.cuda(), volatile=True)
             else:
                 data, target = Variable(data, volatile=True), Variable(target, volatile=True)
 
-            output = self.model(data)
-            loss = self.criterion(output, target)
+            # For the LSTM approach,retrieve the last element of the output sequence
+            if(self.withLSTM):
+                output_seq, _ = self.model(data)
+                last_output = output_seq[-1]
+                loss = self.criterion(last_output, target)
+                pred = last_output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
+
+            # In the non-LSTM, use the whole output of the model
+            else:
+                output = self.model(data)
+                loss = self.criterion(output, target)
+                pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
+
+            # Update the prediction values
             test_loss += loss.data.cpu().numpy()[0]
-            pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
             correct += pred.eq(target.data.view_as(pred)).cpu().sum()
-            
+
+        # Compute the final loss and the accuracy
         test_loss /= len(self.test_loader)
         accuracy = 100. * correct / (batch_idx+1)
 
@@ -95,9 +154,10 @@ class MyAlexNet:
 
         return test_loss, accuracy
 
+# AlexNet Module for pytorch
+# https://github.com/pytorch/vision/blob/master/torchvision/models/alexnet.py
 class AlexNet(nn.Module):
-
-    def __init__(self, num_classes = 8):
+    def __init__(self, withLSTM):
         super(AlexNet, self).__init__()
         self.features = nn.Sequential(
             nn.Conv2d(3, 64, kernel_size=11, stride=4, padding=2),
@@ -120,12 +180,24 @@ class AlexNet(nn.Module):
             nn.ReLU(inplace=True),
             nn.Dropout(),
             nn.Linear(4096, 4096),
-            nn.ReLU(inplace=True),
-            nn.Linear(4096, num_classes)
+            nn.ReLU(inplace=True),                 
         )
+
+        # Final linear layer when not using LSTM
+        self.linear = nn.Linear(4096, num_classes)
+
+        # Final LSTM layer when using LSTM
+        self.rnn = nn.LSTM(4096, num_classes, LSTM_hidden_layers)
+
+        self.withLSTM = withLSTM
 
     def forward(self, x):
         x = self.features(x)
         x = x.view(x.size(0), 256 * 6 * 6)
         x = self.classifier(x)
+        if(self.withLSTM):
+            x = x.view(1, x.size(0), x.size(1))
+            x = self.rnn(x)
+        else:
+            x = self.linear(x)
         return x
