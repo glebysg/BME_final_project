@@ -189,6 +189,8 @@ class GoogLeNet(nn.Module):
         out = self.b5(out)
         out = self.avgpool(out)
         out = out.view(out.size(0), -1)
-        print(out.size())
-        out = self.linear(out)
+        if(self.withLSTM):
+            out = self.rnn(out)
+        else:
+            out = self.linear(out)
         return out
