@@ -2,17 +2,18 @@ import cv2
 import csv
 import argparse
 import pickle
+from random import shuffle
 
 # Example usage:
-#
+# python split_videos.py -i annotated_test_data.csv -w 224 -y 224 -d data/ -l 10 -v data/test_data/
 
 # Functions
 def save_obj(obj, name ):
-    with open('obj/'+ name + '.pkl', 'wb') as f:
+    with open(name + '.pkl', 'wb') as f:
         pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
 
 def load_obj(name):
-    with open('obj/' + name + '.pkl', 'rb') as f:
+    with open(name + '.pkl', 'rb') as f:
         return pickle.load(f)
 
 # Create the parser
@@ -22,18 +23,23 @@ parser.add_argument("-i", "--input_file",
                     "to the .csv containing the annotated videos"))
 parser.add_argument("-d", "--data_path",
                     required=True, help="path to the folder containing the annotated videos")
+parser.add_argument("-v", "--output_vid_path",
+                    required=True, help="path to the folder containing the new videos")
 parser.add_argument("-w", "--width",
                     required=True, type=int,
                     help="desired width of the output video")
 parser.add_argument("-y", "--height",
                     required=True, type=int,
                     help="desired height of the output video")
-parser.add_argument("-l", "--height",
+parser.add_argument("-l", "--length",
                     required=True, type=int,
-                    help="desired length of the output video")
+                    help="desired length of the output video in secconds")
 parser.add_argument("-o", "--output_file",
                     default='out', help=("full filepath including dictname"
                     "to the .pkl containing the produced dictionary"))
+parser.add_argument("-p", "--percentage",
+                    default=80, type=int,
+                    help="percentage of the samples that will be used for training")
 # init variables
 framerate = 30
 # parse the arguments
@@ -41,11 +47,13 @@ args = vars(parser.parse_args())
 # create the dictionary that will have a
 # key - value of: video path - label
 out_dict = {}
+train_dict = {}
+test_dict = {}
 # open the .csv file
 with open(args['input_file']) as csvfile:
     filereader = csv.reader(csvfile, delimiter=',')
-    row = next(filereader)
     video_count = 0
+    sec_count = 0
     cap = None
     for row in filereader:
         # if the row has only one value, it's a video ID
@@ -53,38 +61,60 @@ with open(args['input_file']) as csvfile:
             video_id = int(row[0])
             if cap is not None:
                 cap.release()
-            cap = cv2.VideoCapture(str(video_id)+'.mp4')
+            input_video_name = args['data_path']+str(video_id)+'.mp4'
+            cap = cv2.VideoCapture(input_video_name)
+            print("Is the cap opened?", cap.isOpened(), "for: ", input_video_name)
             video_count = 0
             sec_count = 0
-        elif len(row) == 3:
+        elif len(row) == 3 and (cap is not None):
             init_time = int(row[0])
             end_time = int(row[1])
             label = int(row[2])
+            # initialize the label key with an empty list
+            # if we haven't added that list yet.
+            try:
+                out_dict[label]
+            except KeyError:
+                out_dict[label] = []
             # Read the frames that correspond to one
             # seccond until getting to the init_time
-            while sec_count < init_time:
-                for i in range(framerate) and cap.isOpened():
+            print("sec_count: ", sec_count, " init_time: ", init_time)
+            while sec_count < init_time and cap.isOpened():
+                for i in range(framerate):
                     ret, frame = cap.read()
                 sec_count += 1
-            # Create the new video
-            fourcc = cv2.VideoWriter_fourcc(*'XVID')
-            video_name = str(video_id)+'_'+str(video_count)+'.avi'
-            out = cv2.VideoWriter(,fourcc, 20.0, (640,480))
-            while sec_count < end_time:
-                for vid_secs in range(args['legth']):
-                    for i in range(framerate) and cap.isOpened():
+                # print("Advancing",sec_count, "in: ", video_id)
+            print("sec_count: ", sec_count, " end_time: ", end_time)
+            while sec_count < end_time and cap.isOpened():
+                # Create the new video
+                fourcc = cv2.VideoWriter_fourcc(*'XVID')
+                out_video_name = args['output_vid_path'] + str(video_id)+'_'+str(video_count)+'.avi'
+                out = cv2.VideoWriter(out_video_name,fourcc, framerate, (args['width'],args['height']))
+                individual_duration = 0
+                for vid_secs in range(args['length']):
+                    for i in range(framerate):
                         ret, frame = cap.read()
-                        out.write(frame)
+                        # resize the image to the required size by the videowriter
+                        res = cv2.resize(frame,(args['width'], args['height']))
+                        out.write(res)
                     sec_count += 1
-            out.release()
-            out_dict[video_name] = label
+                    individual_duration += 1
+                out.release()
+                video_count+= 1
+                if individual_duration == args['length']:
+                    out_dict[label].append(out_video_name)
+                else:
+                    print("video: ", out_video_name, "Was too short to be included")
         else:
             print(".csv file follows an invalid format for this program")
-
 # save the dictionary in a file
-save_obj(out_dict,args['output_file']
-
-
-
-        # if the row has several values, it's a time - step with a label
-
+# split the data into train and test
+print(out_dict)
+for key, value in out_dict.items():
+    shuffle(value)
+    percetage_len = int((args['percentage']/100.0)*len(value))
+    train_dict[key] = value[:percetage_len]
+    test_dict[key] = value[percetage_len:]
+save_obj(out_dict,args['output_file'])
+save_obj(train_dict,'train'+args['output_file'])
+save_obj(test_dict,'test'+args['output_file'])
