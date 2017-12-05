@@ -40,10 +40,16 @@ parser.add_argument("-o", "--output_file",
 parser.add_argument("-p", "--percentage",
                     default=80, type=int,
                     help="percentage of the samples that will be used for training")
+parser.add_argument("-f", "--desired_framerate",
+                    default=30, type=int)
+parser.add_argument("-n", "--desired_length",
+                    default=30, type=int)
 # init variables
 framerate = 30
 # parse the arguments
 args = vars(parser.parse_args())
+desired_framerate = args['desired_framerate']
+desired_length = args['desired_length']
 # create the dictionary that will have a
 # key - value of: video path - label
 out_dict = {}
@@ -89,14 +95,18 @@ with open(args['input_file']) as csvfile:
                 # Create the new video
                 fourcc = cv2.VideoWriter_fourcc(*'XVID')
                 out_video_name = args['output_vid_path'] + str(video_id)+'_'+str(video_count)+'.avi'
-                out = cv2.VideoWriter(out_video_name,fourcc, framerate, (args['width'],args['height']))
+                out = cv2.VideoWriter(out_video_name,fourcc, desired_framerate, (args['width'],args['height']))
                 individual_duration = 0
+                img_count = 0
                 for vid_secs in range(args['length']):
                     for i in range(framerate):
                         ret, frame = cap.read()
                         # resize the image to the required size by the videowriter
-                        res = cv2.resize(frame,(args['width'], args['height']))
-                        out.write(res)
+                        if (img_count%int(framerate*args['length']/desired_length)) == 0:
+                            # print("added img", out_video_name)
+                            res = cv2.resize(frame,(args['width'], args['height']))
+                            out.write(res)
+                        img_count += 1
                     sec_count += 1
                     individual_duration += 1
                 out.release()

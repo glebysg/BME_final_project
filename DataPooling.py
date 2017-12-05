@@ -62,7 +62,7 @@ class DataPool:
     def nextImage(self):
         if not self.inilizalized:
             self.initialize_stream()
-            print(self.streams)
+            # print(self.streams)
         ret = False
         while (not ret):
             if self.stream_size == 0:
@@ -89,9 +89,6 @@ class DataPool:
         tensor_frame.append(frame[:,:,1])
         tensor_frame.append(frame[:,:,2])
         tensor_frame = torch.from_numpy(np.array([tensor_frame]))
-        tensor_label = torch.from_numpy(np.array([label]))
-        # tensor_frame = tensor_frame.view(1,-1,tensor_frame.size(1),tensor_frame.size(0))
-        print(tensor_frame.size())
-        print(tensor_label.size())
-        exit(0)
-        return frame, label
+        tensor_label = torch.LongTensor(1)
+        tensor_label[0] = label-2
+        return tensor_frame.float(), tensor_label

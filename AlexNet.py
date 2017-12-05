@@ -8,17 +8,19 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.autograd import Variable
+from DataPooling import DataPool
 
 #Hyper parameters
 learning_rate = 0.01
 momentum = 0.5
-epoch_count = 10
+epoch_count = 3
 num_classes = 8
 LSTM_hidden_layers = 32
+stream_num = 20
 # batch_size = 1
 
 class MyAlexNet:
-    def __init__(self,train_loader,test_loader,withPreloadModel,withCuda,withLSTM):
+    def __init__(self,train_obj_name,test_obj_name,withPreloadModel,withCuda,withLSTM):
         self.model = AlexNet(withLSTM)
         self.withCuda = withCuda
         self.withLSTM = withLSTM
@@ -36,9 +38,11 @@ class MyAlexNet:
             print("************ Loading Model ************")
             self.model.load_state_dict(torch.load('model/AlexNetModel'))
 
-        self.train_loader = train_loader
-        self.test_loader = test_loader
-        self.criterion = nn.CrossEntropyLoss()       
+        # self.train_loader = train_obj_name
+        # self.test_loader = test_obj_name
+        self.train_loader = DataPool(train_obj_name,stream_num)
+        self.test_loader = DataPool(test_obj_name,stream_num)
+        self.criterion = nn.CrossEntropyLoss()
         self.errors = []
         self.epochs = []
         self.times = []
@@ -50,18 +54,24 @@ class MyAlexNet:
             # Set the model to train
             self.model.train(True)
             correct = 0
+            cntr = 0
             # Reset the data pooling
 
-            # loop for as many examples
-            for batch_idx, (data, target) in enumerate(self.train_loader):
-
+            # Loop for all the examples
+            while(True):
+                data,target = self.train_loader.nextImage()
+                if(data is None):
+                    break
+            # for batch_idx, (data, target) in enumerate(self.test_loader):
                 # get the next data, target (as tensors)
 
                 # if (len(input.size()) == 1):
                 ## NOTE: reshape of torch
                 #     input = input.view(1, input.size()[0])
 
-                target = target.type(torch.LongTensor)
+                # target = target.type(torch.LongTensor)
+                # print(data.size())
+                # print(target.size())
 
                 # Convert variables if you are using cuda
                 if(self.withCuda):
@@ -70,7 +80,7 @@ class MyAlexNet:
                     data, target = Variable(data), Variable(target)
 
                 self.optimizer.zero_grad()
-
+                # target = Variable(torch.randn(1).abs().cuda().long())
                 # For the LSTM approach,retrieve the last element of the output sequence
                 if(self.withLSTM):
                     output_seq, _ = self.model(data)
@@ -81,16 +91,25 @@ class MyAlexNet:
                 # In the non-LSTM, use the whole output of the model
                 else:
                     output = self.model(data)
+                    # print(output)
+                    # print(target)
+                    # print("TARGEEEEEEETO")
+                    # print(target.data[0])
                     loss = self.criterion(output, target)
+                    # print(loss)
                     pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
-
+                    # print(pred)
+                
                 # Update the prediction values
                 correct += pred.eq(target.data.view_as(pred)).cpu().sum()
 
                 # Perform a backward propagation
                 loss.backward()
                 self.optimizer.step()
-
+                # print(cntr)
+                cntr+=1
+                if(cntr%1000==0):
+                    print('Used Images: {}, Time taken: {}'.format(cntr,(time.time() - start_time)))
             # Append the error obtained from this particular epoch
             self.errors.append(100-correct/float(len(self.train_loader)))
 
@@ -180,7 +199,7 @@ class AlexNet(nn.Module):
             nn.ReLU(inplace=True),
             nn.Dropout(),
             nn.Linear(4096, 4096),
-            nn.ReLU(inplace=True),                 
+            nn.ReLU(inplace=True),
         )
 
         # Final linear layer when not using LSTM

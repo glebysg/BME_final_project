@@ -120,7 +120,7 @@ class MyGoogLeNet:
         for batch_idx, (data, target) in enumerate(self.test_loader):
             # get the next data, target (as tensors)
 
-            target = target.type(torch.LongTensor)
+            # target = target.type(torch.LongTensor)
 
             # Convert variables if you are using cuda
             if(self.withCuda):
