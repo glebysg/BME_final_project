@@ -12,7 +12,7 @@ from torch.autograd import Variable
 from DataPooling import DataPool
 
 #Hyper parameters
-initial_learning_rate = 0.1
+initial_learning_rate = 0.01
 momentum = 0.9
 epoch_count = 50
 num_classes = 8
@@ -37,7 +37,7 @@ class MyAlexNet:
         # Load the trained model
         if withPreloadModel:
             print("************ Loading Model ************")
-            self.model.load_state_dict(torch.load('model/AlexNetModelAdaptiveLR'))
+            self.model.load_state_dict(torch.load('model/AlexNetModelMomentum09only'))
 
         # self.train_loader = train_obj_name
         # self.test_loader = test_obj_name
@@ -126,10 +126,10 @@ class MyAlexNet:
         for current_epoch in range(1, epoch_count):
             self.epochs.append(current_epoch)
 
-            new_lr = step_decay(current_epoch)
-            print ('Train Epoch: {}'.format(new_lr))
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = new_lr
+            # new_lr = step_decay(current_epoch)
+            # print ('Train Epoch: {}'.format(new_lr))
+            # for param_group in self.optimizer.param_groups:
+                # param_group['lr'] = new_lr
 
             innerTrain(current_epoch)
 
