@@ -62,6 +62,7 @@ class MyAlexNet:
             self.model.train(True)
             correct = 0
             cntr = 0
+            train_loss = 0
             # Reset the data pooling
             # Loop for all the examples
             self.train_loader.restart()
@@ -97,6 +98,7 @@ class MyAlexNet:
 
                 # In the non-LSTM, use the whole output of the model
                 else:
+                    print("data",data[0][0])
                     output = self.model(data)
                     # print(output)
                     # print(target)
@@ -109,14 +111,17 @@ class MyAlexNet:
                 
                 # Update the prediction values
                 correct += pred.eq(target.data.view_as(pred)).cpu().sum()
-
+                
                 # Perform a backward propagation
                 loss.backward()
+                train_loss += loss.data[0]
                 self.optimizer.step()
                 # print(cntr)
                 cntr+=1
                 if(cntr%1000==0):
-                    print('Used Images: {}, Time taken: {}'.format(cntr,(time.time() - start_time)))
+                    print(loss)
+                    print("loss",loss.data[0])
+                    print('Used Images: {}, Time taken: {}, Loss: {}'.format(cntr,(time.time() - start_time),loss.data[0]))
             # Append the error obtained from this particular epoch
             self.errors.append(100-correct/float(self.train_loader.total_images()))
 
@@ -137,7 +142,7 @@ class MyAlexNet:
             self.times.append(time.time() - start_time)
 
         # Save the trained model
-        torch.save(self.model.state_dict(), 'model/AlexNetModelAdaptiveLR')
+        torch.save(self.model.state_dict(), 'model/AlexNetModelMomentumLR')
 
         return self.epochs,self.errors,self.times
 
@@ -148,9 +153,9 @@ class MyAlexNet:
         correct = 0
 
         # Reset the data pooling
-        self.train_loader.restart()
+        self.test_loader.restart()
         while(True):
-            data,target = self.train_loader.nextImage()
+            data,target = self.test_loader.nextImage()
             if(data is None):
                 break
         # loop for as many examples
@@ -184,10 +189,10 @@ class MyAlexNet:
 
         # Compute the final loss and the accuracy
         test_loss /= self.test_loader.total_videos()
-        accuracy = 100. * correct / self.train_loader.total_images()
+        accuracy = 100. * correct / self.test_loader.total_images()
 
         print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, \
-        self.train_loader.total_images(), accuracy))
+        self.test_loader.total_images(), accuracy))
 
         return test_loss, accuracy
 
