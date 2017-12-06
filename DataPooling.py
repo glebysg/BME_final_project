@@ -12,10 +12,21 @@ def load_obj(name):
 class DataPool:
 
     def __init__(self, name, stream_size):
+        self.obj_name = name
+        self.original_stream_size = stream_size
         self.dict_obj = load_obj(name)
         self.length = self.get_dict_len()
         self.streams = []
         self.stream_size = stream_size
+        self.round_robin_index = 0
+        self.inilizalized = False
+        self.images_in_video = 20
+
+    def restart(self):
+        self.dict_obj = load_obj(self.obj_name)
+        self.length = self.get_dict_len()
+        self.streams = []
+        self.stream_size = self.original_stream_size
         self.round_robin_index = 0
         self.inilizalized = False
 
@@ -58,6 +69,9 @@ class DataPool:
 
     def total_videos(self):
         return self.length
+
+    def total_images(self):
+        return self.length*self.images_in_video
 
     def nextImage(self):
         if not self.inilizalized:

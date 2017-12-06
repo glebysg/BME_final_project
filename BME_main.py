@@ -39,11 +39,9 @@ if(useCNN):
     if(useGoogLeNet):
         print("************ Using GoogLeNet ************")
         net = GoogLeNet.MyGoogLeNet(train_obj_name,test_obj_name,usePreloadModel,withCuda,withLSTM)
-        # net = GoogLeNet.MyGoogLeNet(train_loader,test_loader,usePreloadModel,withCuda,withLSTM)
     else:
         print("************ Using AlexNet ************")
         net = AlexNet.MyAlexNet(train_obj_name,test_obj_name,usePreloadModel,withCuda,withLSTM)
-        # net = AlexNet.MyAlexNet(train_loader,test_loader,usePreloadModel,withCuda,withLSTM)
 
     if(isTraining):
         print("************ Training ************")

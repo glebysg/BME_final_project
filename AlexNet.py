@@ -1,6 +1,7 @@
 #!/usr/bin/env python3.6
 
 '''AlexNet with PyTorch.'''
+import math
 import time
 import torch
 import numpy as np
@@ -11,9 +12,9 @@ from torch.autograd import Variable
 from DataPooling import DataPool
 
 #Hyper parameters
-learning_rate = 0.01
-momentum = 0.5
-epoch_count = 3
+initial_learning_rate = 0.1
+momentum = 0.9
+epoch_count = 50
 num_classes = 8
 LSTM_hidden_layers = 32
 stream_num = 20
@@ -36,7 +37,7 @@ class MyAlexNet:
         # Load the trained model
         if withPreloadModel:
             print("************ Loading Model ************")
-            self.model.load_state_dict(torch.load('model/AlexNetModel'))
+            self.model.load_state_dict(torch.load('model/AlexNetModelAdaptiveLR'))
 
         # self.train_loader = train_obj_name
         # self.test_loader = test_obj_name
@@ -47,17 +48,23 @@ class MyAlexNet:
         self.epochs = []
         self.times = []
 
-        self.optimizer = optim.SGD(self.model.parameters(), learning_rate, momentum)
+        self.optimizer = optim.SGD(self.model.parameters(), initial_learning_rate, momentum)
 
     def train(self):
+        def step_decay(epoch):
+           drop = 0.5
+           epochs_drop = 10.0
+           lrate = initial_learning_rate * math.pow(drop, math.floor((1+epoch)/epochs_drop))
+           return lrate
+
         def innerTrain(epoch):
             # Set the model to train
             self.model.train(True)
             correct = 0
             cntr = 0
             # Reset the data pooling
-
             # Loop for all the examples
+            self.train_loader.restart()
             while(True):
                 data,target = self.train_loader.nextImage()
                 if(data is None):
@@ -111,19 +118,26 @@ class MyAlexNet:
                 if(cntr%1000==0):
                     print('Used Images: {}, Time taken: {}'.format(cntr,(time.time() - start_time)))
             # Append the error obtained from this particular epoch
-            self.errors.append(100-correct/float(len(self.train_loader)))
+            self.errors.append(100-correct/float(self.train_loader.total_images()))
 
         start_time = time.time()
 
         # Iterate for all the epochs
         for current_epoch in range(1, epoch_count):
             self.epochs.append(current_epoch)
+
+            new_lr = step_decay(current_epoch)
+            print ('Train Epoch: {}'.format(new_lr))
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = new_lr
+
             innerTrain(current_epoch)
+
             print ('Train Epoch: {}, Time taken: {}'.format(current_epoch, (time.time() - start_time)))
             self.times.append(time.time() - start_time)
 
         # Save the trained model
-        torch.save(self.model.state_dict(), 'model/AlexNetModel')
+        torch.save(self.model.state_dict(), 'model/AlexNetModelAdaptiveLR')
 
         return self.epochs,self.errors,self.times
 
@@ -134,12 +148,16 @@ class MyAlexNet:
         correct = 0
 
         # Reset the data pooling
-
+        self.train_loader.restart()
+        while(True):
+            data,target = self.train_loader.nextImage()
+            if(data is None):
+                break
         # loop for as many examples
-        for batch_idx, (data, target) in enumerate(self.test_loader):
+        # for batch_idx, (data, target) in enumerate(self.test_loader):
             # get the next data, target (as tensors)
 
-            target = target.type(torch.LongTensor)
+            # target = target.type(torch.LongTensor)
 
             # Convert variables if you are using cuda
             if(self.withCuda):
@@ -165,11 +183,11 @@ class MyAlexNet:
             correct += pred.eq(target.data.view_as(pred)).cpu().sum()
 
         # Compute the final loss and the accuracy
-        test_loss /= len(self.test_loader)
-        accuracy = 100. * correct / (batch_idx+1)
+        test_loss /= self.test_loader.total_videos()
+        accuracy = 100. * correct / self.train_loader.total_images()
 
         print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, \
-        (batch_idx+1), accuracy))
+        self.train_loader.total_images(), accuracy))
 
         return test_loss, accuracy
 

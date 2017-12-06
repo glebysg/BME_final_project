@@ -7,18 +7,20 @@ import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from DataPooling import DataPool
 from torch.autograd import Variable
 
 #Hyper parameters
 learning_rate = 0.01
 momentum = 0.5
-epoch_count = 10
+epoch_count = 50
 num_classes = 8
 LSTM_hidden_layers = 32
+stream_num = 20
 # batch_size = 1
 
 class MyGoogLeNet:
-    def __init__(self,train_loader,test_loader,withPreloadModel,withCuda,withLSTM):
+    def __init__(self,train_obj_name,test_obj_name,withPreloadModel,withCuda,withLSTM):
         self.model = GoogLeNet(withLSTM)
         self.withCuda = withCuda
         self.withLSTM = withLSTM
@@ -36,8 +38,8 @@ class MyGoogLeNet:
             print("************ Loading Model ************")
             self.model.load_state_dict(torch.load('model/GoogLeNetModel'))
 
-        self.train_loader = train_loader
-        self.test_loader = test_loader
+        self.train_loader = DataPool(train_obj_name,stream_num)
+        self.test_loader = DataPool(test_obj_name,stream_num)
         self.criterion = nn.CrossEntropyLoss()       
         self.errors = []
         self.epochs = []
@@ -50,10 +52,17 @@ class MyGoogLeNet:
             # Set the model to train
             self.model.train(True)
             correct = 0
+            cntr = 0
             # Reset the data pooling
-
+            # Loop for all the examples
+            self.train_loader.restart()
+            while(True):
+                data,target = self.train_loader.nextImage()
+                if(data is None):
+                    break
             # loop for as many examples
-            for batch_idx, (data, target) in enumerate(self.train_loader):
+
+            # for batch_idx, (data, target) in enumerate(self.train_loader):
 
                 # get the next data, target (as tensors)
 
@@ -61,7 +70,7 @@ class MyGoogLeNet:
                 ## NOTE: reshape of torch
                 #     input = input.view(1, input.size()[0])
 
-                target = target.type(torch.LongTensor)
+                # target = target.type(torch.LongTensor)
 
                 # Convert variables if you are using cuda
                 if(self.withCuda):
@@ -90,9 +99,12 @@ class MyGoogLeNet:
                 # Perform a backward propagation
                 loss.backward()
                 self.optimizer.step()
+                cntr+=1
+                if(cntr%1000==0):
+                    print('Used Images: {}, Time taken: {}'.format(cntr,(time.time() - start_time)))
 
             # Append the error obtained from this particular epoch
-            self.errors.append(100-correct/float(len(self.train_loader)))
+            self.errors.append(100-correct/float(self.train_loader.total_videos()))
 
         start_time = time.time()
 
@@ -113,11 +125,16 @@ class MyGoogLeNet:
         self.model.train(False)
         test_loss = 0
         correct = 0
-
+        cntr = 0
         # Reset the data pooling
-
+        # Loop for all the examples
+        self.train_loader.restart()
+        while(True):
+            data,target = self.train_loader.nextImage()
+            if(data is None):
+                break
         # loop for as many examples
-        for batch_idx, (data, target) in enumerate(self.test_loader):
+        # for batch_idx, (data, target) in enumerate(self.test_loader):
             # get the next data, target (as tensors)
 
             # target = target.type(torch.LongTensor)
@@ -144,7 +161,10 @@ class MyGoogLeNet:
             # Update the prediction values
             test_loss += loss.data.cpu().numpy()[0]
             correct += pred.eq(target.data.view_as(pred)).cpu().sum()
-
+            
+            cntr+=1
+            if(cntr%1000==0):
+                print('Used Images: {}, Time taken: {}'.format(cntr,(time.time() - start_time)))
         # Compute the final loss and the accuracy
         test_loss /= len(self.test_loader)
         accuracy = 100. * correct / (batch_idx+1)
