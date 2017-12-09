@@ -16,7 +16,7 @@ initial_learning_rate = 0.1
 momentum = 0.9
 epoch_count = 50
 num_classes = 8
-LSTM_hidden_layers = 64
+LSTM_hidden_layers = 32 
 stream_num = 20
 # batch_size = 1
 

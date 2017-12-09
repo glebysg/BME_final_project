@@ -21,7 +21,7 @@ withLSTM = False
 net = []
 train_obj_name = 'pkls/trainout'
 test_obj_name = 'pkls/testout'
-model='LSTM64_LR_Momentum_fold1'
+model='LSTM32_LR_Momentum_fold1'
 fignames = 'figures/'+model+'.png'
 
 if(useCNN):
