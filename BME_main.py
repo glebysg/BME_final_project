@@ -21,7 +21,8 @@ withLSTM = False
 net = []
 train_obj_name = 'pkls/trainout'
 test_obj_name = 'pkls/testout'
-fignames = 'figures/LSTM-LR+Momentum.png'
+model='LSTM64_LR_Momentum_fold1'
+fignames = 'figures/'+model+'.png'
 
 if(useCNN):
     ###################################33tres
@@ -86,8 +87,8 @@ else:
     ###################################
 
     print("************ Using Simple LSTM ************")
-    net = LSTM.MyLSTM(train_obj_name,test_obj_name,usePreloadModel,withCuda)
-    net = LSTM.MyLSTM(train_obj_name,test_obj_name,usePreloadModel,withCuda)
+    net = LSTM.MyLSTM(train_obj_name,test_obj_name,usePreloadModel,withCuda,model)
+    net = LSTM.MyLSTM(train_obj_name,test_obj_name,usePreloadModel,withCuda,model)
     if(isTraining):
         print("************ Training ************")
         ephocs, errors, times, accuracies = net.train()
