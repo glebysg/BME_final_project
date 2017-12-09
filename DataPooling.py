@@ -151,14 +151,14 @@ class DataPool:
             tensor_frame = []
             tensor_label = torch.LongTensor(1)
             tensor_label[0] = label-2
-            while (true):
+            while (True):
                 ret, frame = cap.read()
                 if not ret:
                     break
                 else:
                     # Manual Resize and append to the tensor ret
                     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                    flat_gray = np.resize(gray,[1,-1])
-                    tensor_frame.append((flat_gray - np.tile(np.mean(flat_gray), (224,224)))/255.0)
-                    tensor_frame = torch.from_numpy(np.array([tensor_frame]))
+                    flat_gray = np.reshape(gray,(1,-1))
+                    tensor_frame.append((flat_gray - np.tile(np.mean(flat_gray), (1,224*224)))/255.0)
+            tensor_frame = torch.from_numpy(np.array(tensor_frame))
             return tensor_frame.float(), tensor_label

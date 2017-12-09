@@ -14,16 +14,17 @@ from torch.autograd import Variable
 #Hyper parameters
 initial_learning_rate = 0.1
 momentum = 0.9
-epoch_count = 10
+epoch_count = 50
 num_classes = 8
-LSTM_hidden_layers = 32
+LSTM_hidden_layers = 64
 stream_num = 20
 # batch_size = 1
 
 class MyLSTM:
-    def __init__(self,train_obj_name,test_obj_name,withPreloadModel,withCuda):
+    def __init__(self,train_obj_name,test_obj_name,withPreloadModel,withCuda,modelName):
         self.model = LSTM()
         self.withCuda = withCuda
+        self.model_name = 'model/'+modelName
 
         if(self.withCuda):
             self.model.cuda()
@@ -31,10 +32,10 @@ class MyLSTM:
         # Load the trained model
         if withPreloadModel:
             print("************ Loading Model ************")
-            self.model.load_state_dict(torch.load('model/LSTMModelLRMomentum'))
+            self.model.load_state_dict(torch.load(self.model_name))
 
-        self.train_loader = DataPool(train_obj_name,stream_num)
-        self.test_loader = DataPool(test_obj_name,stream_num)
+        self.train_loader = DataPool(train_obj_name,stream_num,'LSTM')
+        self.test_loader = DataPool(test_obj_name,stream_num,'LSTM')
         self.criterion = nn.NLLLoss()
         self.errors = []
         self.epochs = []
@@ -63,7 +64,6 @@ class MyLSTM:
                 data,target = self.train_loader.nextImage()
                 if(data is None):
                     break
-
                 # get the next data, target (as tensors)
 
                 # if (len(input.size()) == 1):
@@ -95,10 +95,9 @@ class MyLSTM:
 
             # Append the error obtained from this particular epoch
                 cntr+=1
-                if(cntr%1000==0):
+                if(cntr%100==0):
                     print(loss)
-                    print("loss",loss.data[0])
-                    print('Used Images: {}, Time taken: {}, Loss: {}, Train Acc: {}'.format(cntr,(time.time() - \
+                    print('Used Images: {}, Time taken: {}, Loss: {}, Train Acc: {}'.format(cntr*20,(time.time() - \
                             start_time),loss.data[0],100.*(correct/cntr)))
             # Append the error obtained from this particular epoch
             self.errors.append(100-correct/float(self.train_loader.total_images()))
@@ -109,7 +108,7 @@ class MyLSTM:
         for current_epoch in range(1, epoch_count):
             self.epochs.append(current_epoch)
             new_lr = step_decay(current_epoch)
-            print ('Train Epoch: {}'.format(new_lr))
+            print ('Train Epoch learning rate: {}'.format(new_lr))
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = new_lr
 
@@ -119,7 +118,7 @@ class MyLSTM:
             self.times.append(time.time() - start_time)
 
         # Save the trained model
-        torch.save(self.model.state_dict(), 'model/LSTMModelLRMomentum')
+        torch.save(self.model.state_dict(), self.model_name)
 
         return self.epochs,self.errors,self.times,self.accuracies
 
