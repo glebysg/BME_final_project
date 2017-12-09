@@ -12,7 +12,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 plt.switch_backend('agg')
 
-useCNN = False
+useCNN = True
 useGoogLeNet = False
 usePreloadModel = False
 isTraining = True
@@ -21,7 +21,8 @@ withLSTM = False
 net = []
 train_obj_name = 'pkls/trainout'
 test_obj_name = 'pkls/testout'
-model='LSTM64_LR_Momentum_fold1'
+model='AlexNet_Regression'
+#model='LSTM64_LR_Momentum_fold1'
 fignames = 'figures/'+model+'.png'
 
 if(useCNN):

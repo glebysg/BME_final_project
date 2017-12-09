@@ -127,11 +127,17 @@ class MyLSTM:
         self.model.train(False)
         test_loss = 0
         correct = 0
+        cntr = 0
+        # Reset the data pooling
+        start_time = time.time()
+        # Loop for all the examples
+        self.test_loader.restart()
+        while(True):
+            data,target = self.test_loader.nextImage()
+            if(data is None):
+                break
 
         # Reset the data pooling
-
-        # loop for as many examples
-        for batch_idx, (data, target) in enumerate(self.test_loader):
             # get the next data, target (as tensors)
 
             target = target.type(torch.LongTensor)

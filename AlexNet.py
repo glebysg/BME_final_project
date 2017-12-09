@@ -43,7 +43,7 @@ class MyAlexNet:
         # self.test_loader = test_obj_name
         self.train_loader = DataPool(train_obj_name,stream_num)
         self.test_loader = DataPool(test_obj_name,stream_num)
-        self.criterion = nn.NLLLoss()
+        self.criterion = nn.MSELoss()
         self.errors = []
         self.epochs = []
         self.times = []
@@ -224,12 +224,14 @@ class AlexNet(nn.Module):
             nn.Linear(256 * 6 * 6, 4096),
             nn.ReLU(inplace=True),
             nn.Dropout(),
-            nn.Linear(4096, 4096),
+            nn.Linear(4096, 64),
+            nn.ReLU(inplace=True),
+            nn.Linear(64, num_classes),
             nn.ReLU(inplace=True),
         )
 
         # Final linear layer when not using LSTM
-        self.linear = nn.Linear(4096, num_classes)
+        self.linear = nn.Linear(num_classes, 1)
 
         # Final LSTM layer when using LSTM
         self.rnn = nn.LSTM(4096, num_classes, LSTM_hidden_layers)
@@ -248,5 +250,5 @@ class AlexNet(nn.Module):
         else:
             x = self.linear(x)
         # print(self.softmax(x))
-        return self.softmax(x)
-        # return x
+        # return self.softmax(x)
+        return x
