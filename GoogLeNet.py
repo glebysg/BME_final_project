@@ -144,6 +144,7 @@ class MyGoogLeNet:
         correct = 0
         cntr = 0
         # Reset the data pooling
+        start_time = time.time()
         # Loop for all the examples
         self.test_loader.restart()
         while(True):
@@ -172,22 +173,25 @@ class MyGoogLeNet:
             # In the non-LSTM, use the whole output of the model
             else:
                 output = self.model(data)
-                loss = self.criterion(output, target)
+                loss = F.nll_loss(output, target, size_average=False).data[0]
+                test_loss += loss
                 pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
 
             # Update the prediction values
-            test_loss += loss.data.cpu().numpy()[0]
             correct += pred.eq(target.data.view_as(pred)).cpu().sum()
             
             cntr+=1
             if(cntr%1000==0):
-                print('Used Images: {}, Time taken: {}'.format(cntr,(time.time() - start_time)))
-        # Compute the final loss and the accuracy
-        test_loss /= len(self.test_loader)
-        accuracy = 100. * correct / (batch_idx+1)
+                print('Correct {} at {}'.format(correct,cntr))
+                print('Used Images: {}, Time taken: {}, Loss: {}, Test Acc: {}'.format(cntr,(time.time() - \
+                            start_time),loss,100.*(correct/cntr)))
+                # Compute the final loss and the accuracy
+        test_loss /= float(self.test_loader.total_images())
+        accuracy = 100. * correct / float(self.test_loader.total_images())
 
+        print('Correct {} at {}'.format(correct,cntr))
         print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, \
-        (batch_idx+1), accuracy))
+        (self.test_loader.total_images()), accuracy))
 
         return test_loss, accuracy
 
