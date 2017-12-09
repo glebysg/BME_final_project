@@ -11,15 +11,15 @@ import torch.nn as nn
 from torch.autograd import Variable
 plt.switch_backend('agg')
 
-useCNN = True
-useGoogLeNet = True
+useCNN = False
+useGoogLeNet = False
 usePreloadModel = False
 isTraining = True
 withCuda = True
 withLSTM = False
 net = []
-train_obj_name = 'trainout'
-test_obj_name = 'testout'
+train_obj_name = 'pkls/trainout'
+test_obj_name = 'pkls/testout'
 fignames = 'figures/GoogLeNetAdaptiveLR+Momentum.png'
 
 if(useCNN):
