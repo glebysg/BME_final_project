@@ -1,6 +1,7 @@
 #!/usr/bin/env python3.6
 
 '''GoogLeNet with PyTorch.'''
+import math
 import time
 import torch
 import numpy as np
@@ -11,8 +12,8 @@ from DataPooling import DataPool
 from torch.autograd import Variable
 
 #Hyper parameters
-learning_rate = 0.01
-momentum = 0.5
+initial_learning_rate = 0.1
+momentum = 0.9
 epoch_count = 50
 num_classes = 8
 LSTM_hidden_layers = 32
@@ -36,18 +37,25 @@ class MyGoogLeNet:
         # Load the trained model
         if withPreloadModel:
             print("************ Loading Model ************")
-            self.model.load_state_dict(torch.load('model/GoogLeNetModel'))
+            self.model.load_state_dict(torch.load('model/GoogLeNetModelLRMomentum'))
 
         self.train_loader = DataPool(train_obj_name,stream_num)
         self.test_loader = DataPool(test_obj_name,stream_num)
-        self.criterion = nn.CrossEntropyLoss()       
+        self.criterion = nn.NLLLoss()
         self.errors = []
         self.epochs = []
         self.times = []
+        self.accuracies = []
 
-        self.optimizer = optim.SGD(self.model.parameters(), learning_rate, momentum)
+        self.optimizer = optim.SGD(self.model.parameters(), initial_learning_rate, momentum)
 
     def train(self):
+        def step_decay(epoch):
+            drop = 0.5
+            epochs_drop = 10.0
+            lrate = initial_learning_rate * math.pow(drop, math.floor((1+epoch)/epochs_drop))
+            return lrate
+
         def innerTrain(epoch):
             # Set the model to train
             self.model.train(True)
@@ -101,22 +109,31 @@ class MyGoogLeNet:
                 self.optimizer.step()
                 cntr+=1
                 if(cntr%1000==0):
-                    print('Used Images: {}, Time taken: {}'.format(cntr,(time.time() - start_time)))
-
+                    print(loss)
+                    print("loss",loss.data[0])
+                    print('Used Images: {}, Time taken: {}, Loss: {}, Train Acc: {}'.format(cntr,(time.time() - \
+                            start_time),loss.data[0],100.*(correct/cntr)))
             # Append the error obtained from this particular epoch
-            self.errors.append(100-correct/float(self.train_loader.total_videos()))
+            self.errors.append(100-correct/float(self.train_loader.total_images()))
+            self.accuracies.append(100.*(correct/self.train_loader.total_images()))
 
         start_time = time.time()
 
         # Iterate for all the epochs
         for current_epoch in range(1, epoch_count):
             self.epochs.append(current_epoch)
+            new_lr = step_decay(current_epoch)
+            print ('Train Epoch: {}'.format(new_lr))
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = new_lr
+
             innerTrain(current_epoch)
+
             print ('Train Epoch: {}, Time taken: {}'.format(current_epoch, (time.time() - start_time)))
             self.times.append(time.time() - start_time)
 
         # Save the trained model
-        torch.save(self.model.state_dict(), 'model/GoogLeNetModel')
+        torch.save(self.model.state_dict(), 'model/GoogLeNetModelLRMomentum')
 
         return self.epochs,self.errors,self.times
 
@@ -128,9 +145,9 @@ class MyGoogLeNet:
         cntr = 0
         # Reset the data pooling
         # Loop for all the examples
-        self.train_loader.restart()
+        self.test_loader.restart()
         while(True):
-            data,target = self.train_loader.nextImage()
+            data,target = self.test_loader.nextImage()
             if(data is None):
                 break
         # loop for as many examples
@@ -257,6 +274,9 @@ class GoogLeNet(nn.Module):
 
         # Final LSTM layer when using LSTM
         self.rnn = nn.LSTM(1024, num_classes, LSTM_hidden_layers)
+
+        self.softmax = nn.LogSoftmax()
+
         self.withLSTM = withLSTM
 
     def forward(self, x):
@@ -279,4 +299,4 @@ class GoogLeNet(nn.Module):
         else:
             out = out.view(out.size(0), -1)
             out = self.linear(out)
-        return out
+        return self.softmax(out)

@@ -37,16 +37,17 @@ class MyAlexNet:
         # Load the trained model
         if withPreloadModel:
             print("************ Loading Model ************")
-            self.model.load_state_dict(torch.load('model/AlexNetModelAdaptiveLR'))
+            self.model.load_state_dict(torch.load('model/AlexNetModelMomentum+LR'))
 
         # self.train_loader = train_obj_name
         # self.test_loader = test_obj_name
         self.train_loader = DataPool(train_obj_name,stream_num)
         self.test_loader = DataPool(test_obj_name,stream_num)
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = nn.NLLLoss()
         self.errors = []
         self.epochs = []
         self.times = []
+        self.accuracies = []
 
         self.optimizer = optim.SGD(self.model.parameters(), initial_learning_rate, momentum)
 
@@ -98,7 +99,7 @@ class MyAlexNet:
 
                 # In the non-LSTM, use the whole output of the model
                 else:
-                    print("data",data[0][0])
+                    # print("data",data[0][0])
                     output = self.model(data)
                     # print(output)
                     # print(target)
@@ -107,7 +108,7 @@ class MyAlexNet:
                     loss = self.criterion(output, target)
                     # print(loss)
                     pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
-                    # print(pred)
+                    # print(pred[0], target[0])
                 
                 # Update the prediction values
                 correct += pred.eq(target.data.view_as(pred)).cpu().sum()
@@ -121,14 +122,16 @@ class MyAlexNet:
                 if(cntr%1000==0):
                     print(loss)
                     print("loss",loss.data[0])
-                    print('Used Images: {}, Time taken: {}, Loss: {}'.format(cntr,(time.time() - start_time),loss.data[0]))
+                    print('Used Images: {}, Time taken: {}, Loss: {}, Train Acc: {}'.format(cntr,(time.time() - \
+                            start_time),loss.data[0],100.*(correct/((epoch*self.train_loader.total_images())+cntr))))
             # Append the error obtained from this particular epoch
             self.errors.append(100-correct/float(self.train_loader.total_images()))
+            self.accuracies.append(100.*(correct/self.train_loader.total_images()))
 
         start_time = time.time()
 
         # Iterate for all the epochs
-        for current_epoch in range(1, epoch_count):
+        for current_epoch in range(0, epoch_count):
             self.epochs.append(current_epoch)
 
             new_lr = step_decay(current_epoch)
@@ -142,9 +145,9 @@ class MyAlexNet:
             self.times.append(time.time() - start_time)
 
         # Save the trained model
-        torch.save(self.model.state_dict(), 'model/AlexNetModelMomentumLR')
+        torch.save(self.model.state_dict(), 'model/AlexNetModelMomentum+LR')
 
-        return self.epochs,self.errors,self.times
+        return self.epochs,self.errors,self.times,self.accuracies
 
     def test(self):
         # Set the model to test
@@ -188,8 +191,8 @@ class MyAlexNet:
             correct += pred.eq(target.data.view_as(pred)).cpu().sum()
 
         # Compute the final loss and the accuracy
-        test_loss /= self.test_loader.total_videos()
-        accuracy = 100. * correct / self.test_loader.total_images()
+        test_loss /= (self.test_loader.total_videos()*self.test_loader.total_images())
+        accuracy = 100. * correct / (self.test_loader.total_images())
 
         print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, \
         self.test_loader.total_images(), accuracy))
@@ -233,6 +236,8 @@ class AlexNet(nn.Module):
 
         self.withLSTM = withLSTM
 
+        self.softmax = nn.LogSoftmax()
+
     def forward(self, x):
         x = self.features(x)
         x = x.view(x.size(0), 256 * 6 * 6)
@@ -242,4 +247,6 @@ class AlexNet(nn.Module):
             x = self.rnn(x)
         else:
             x = self.linear(x)
-        return x
+        # print(self.softmax(x))
+        return self.softmax(x)
+        # return x
