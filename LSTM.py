@@ -1,24 +1,27 @@
 #!/usr/bin/env python3.6
 
 '''Simple LSTM with PyTorch.'''
+import math
 import time
 import torch
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from DataPooling import DataPool
 from torch.autograd import Variable
 
 #Hyper parameters
-learning_rate = 0.01
-momentum = 0.5
+initial_learning_rate = 0.1
+momentum = 0.9
 epoch_count = 10
 num_classes = 8
-LSTM_hidden_layers = 2
+LSTM_hidden_layers = 32
+stream_num = 20
 # batch_size = 1
 
 class MyLSTM:
-    def __init__(self,train_loader,test_loader,withPreloadModel,withCuda):
+    def __init__(self,train_obj_name,test_obj_name,withPreloadModel,withCuda):
         self.model = LSTM()
         self.withCuda = withCuda
 
@@ -28,26 +31,38 @@ class MyLSTM:
         # Load the trained model
         if withPreloadModel:
             print("************ Loading Model ************")
-            self.model.load_state_dict(torch.load('model/LSTMModel'))
+            self.model.load_state_dict(torch.load('model/LSTMModelLRMomentum'))
 
-        self.train_loader = train_loader
-        self.test_loader = test_loader
-        self.criterion = nn.CrossEntropyLoss()       
+        self.train_loader = DataPool(train_obj_name,stream_num)
+        self.test_loader = DataPool(test_obj_name,stream_num)
+        self.criterion = nn.NLLLoss()
         self.errors = []
         self.epochs = []
         self.times = []
+        self.accuracies = []
 
-        self.optimizer = optim.SGD(self.model.parameters(), learning_rate, momentum)
+        self.optimizer = optim.SGD(self.model.parameters(), initial_learning_rate, momentum)
 
     def train(self):
+        def step_decay(epoch):
+            drop = 0.5
+            epochs_drop = 10.0
+            lrate = initial_learning_rate * math.pow(drop, math.floor((1+epoch)/epochs_drop))
+            return lrate
+
         def innerTrain(epoch):
             # Set the model to train
             self.model.train(True)
+            cntr = 0
             correct = 0
             # Reset the data pooling
 
             # loop for as many examples
-            for batch_idx, (data, target) in enumerate(self.train_loader):
+            self.train_loader.restart()
+            while(True):
+                data,target = self.train_loader.nextImage()
+                if(data is None):
+                    break
 
                 # get the next data, target (as tensors)
 
@@ -79,21 +94,34 @@ class MyLSTM:
                 self.optimizer.step()
 
             # Append the error obtained from this particular epoch
-            self.errors.append(100-correct/float(len(self.train_loader)))
+                cntr+=1
+                if(cntr%1000==0):
+                    print(loss)
+                    print("loss",loss.data[0])
+                    print('Used Images: {}, Time taken: {}, Loss: {}, Train Acc: {}'.format(cntr,(time.time() - \
+                            start_time),loss.data[0],100.*(correct/cntr)))
+            # Append the error obtained from this particular epoch
+            self.errors.append(100-correct/float(self.train_loader.total_images()))
+            self.accuracies.append(100.*(correct/self.train_loader.total_images()))
 
         start_time = time.time()
 
-        # Iterate for all the epochs
         for current_epoch in range(1, epoch_count):
             self.epochs.append(current_epoch)
+            new_lr = step_decay(current_epoch)
+            print ('Train Epoch: {}'.format(new_lr))
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = new_lr
+
             innerTrain(current_epoch)
+
             print ('Train Epoch: {}, Time taken: {}'.format(current_epoch, (time.time() - start_time)))
             self.times.append(time.time() - start_time)
 
         # Save the trained model
-        torch.save(self.model.state_dict(), 'model/LSTMModel')
+        torch.save(self.model.state_dict(), 'model/LSTMModelLRMomentum')
 
-        return self.epochs,self.errors,self.times
+        return self.epochs,self.errors,self.times,self.accuracies
 
     def test(self):
         # Set the model to test
