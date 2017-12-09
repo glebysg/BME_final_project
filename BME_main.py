@@ -9,9 +9,10 @@ import matplotlib.pyplot as plt
 
 import torch.nn as nn
 from torch.autograd import Variable
+plt.switch_backend('agg')
 
 useCNN = True
-useGoogLeNet = False
+useGoogLeNet = True
 usePreloadModel = False
 isTraining = True
 withCuda = True
@@ -19,6 +20,7 @@ withLSTM = False
 net = []
 train_obj_name = 'trainout'
 test_obj_name = 'testout'
+fignames = 'figures/GoogLeNetAdaptiveLR+Momentum.png'
 
 if(useCNN):
     ###################################33tres
@@ -45,7 +47,7 @@ if(useCNN):
 
     if(isTraining):
         print("************ Training ************")
-        ephocs, errors, times = net.train()
+        ephocs, errors, times, accuracies = net.train()
 
         fig = plt.figure(1)
         firstSubPlot = plt.subplot(211)
@@ -53,10 +55,11 @@ if(useCNN):
         firstSubPlot.set_xlabel('Epochs')
         firstSubPlot.set_ylabel('Error')
         secondSubPlot = plt.subplot(212)
-        plt.plot(ephocs,times,'bs')
+        plt.plot(ephocs,accuracies,'bs')
         secondSubPlot.set_xlabel('Epochs')
-        secondSubPlot.set_ylabel('Time')
-        plt.show()
+        secondSubPlot.set_ylabel('Train Acc')
+        fig.savefig(fignames)
+        # plt.show()
     else:
         print("************ Testing ************")
         test_loss, accuracy = net.test()
@@ -99,7 +102,8 @@ else:
         plt.plot(ephocs,times,'bs')
         secondSubPlot.set_xlabel('Epochs')
         secondSubPlot.set_ylabel('Time')  
-        plt.show()
+        fig.savefig(fignames)
+        # plt.show()
     else:
         print("************ Testing ************")
         test_loss, accuracy = net.test()

@@ -99,9 +99,9 @@ class DataPool:
             self.round_robin_index %= self.stream_size
         # Manual Resize
         tensor_frame = []
-        tensor_frame.append(frame[:,:,0])
-        tensor_frame.append(frame[:,:,1])
-        tensor_frame.append(frame[:,:,2])
+        tensor_frame.append((frame[:,:,0] - np.tile(np.mean(frame[:,:,0]), (224,224)))/255.0)
+        tensor_frame.append((frame[:,:,1] - np.tile(np.mean(frame[:,:,1]), (224,224)))/255.0)
+        tensor_frame.append((frame[:,:,2] - np.tile(np.mean(frame[:,:,2]), (224,224)))/255.0)
         tensor_frame = torch.from_numpy(np.array([tensor_frame]))
         tensor_label = torch.LongTensor(1)
         tensor_label[0] = label-2
