@@ -21,10 +21,11 @@ stream_num = 20
 # batch_size = 1
 
 class MyGoogLeNet:
-    def __init__(self,train_obj_name,test_obj_name,withPreloadModel,withCuda,withLSTM):
+    def __init__(self,train_obj_name,test_obj_name,withPreloadModel,withCuda,withLSTM,modelName):
         self.model = GoogLeNet(withLSTM)
         self.withCuda = withCuda
         self.withLSTM = withLSTM
+        self.model_name = 'model/'+modelName
 
         if(self.withLSTM):
             print("************ Using LSTM ************")
@@ -37,7 +38,7 @@ class MyGoogLeNet:
         # Load the trained model
         if withPreloadModel:
             print("************ Loading Model ************")
-            self.model.load_state_dict(torch.load('model/GoogLeNetModelLRMomentum'))
+            self.model.load_state_dict(torch.load(self.model_name))
 
         self.train_loader = DataPool(train_obj_name,stream_num)
         self.test_loader = DataPool(test_obj_name,stream_num)
@@ -48,6 +49,9 @@ class MyGoogLeNet:
         self.accuracies = []
 
         self.optimizer = optim.SGD(self.model.parameters(), initial_learning_rate, momentum)
+
+    def getEmbedding(self,x):
+        return self.model.getEmbedding(x)
 
     def train(self):
         def step_decay(epoch):
@@ -133,7 +137,7 @@ class MyGoogLeNet:
             self.times.append(time.time() - start_time)
 
         # Save the trained model
-        torch.save(self.model.state_dict(), 'model/GoogLeNetModelLRMomentum')
+        torch.save(self.model.state_dict(), self.model_name)
 
         return self.epochs,self.errors,self.times
 
@@ -167,7 +171,8 @@ class MyGoogLeNet:
             if(self.withLSTM):
                 output_seq, _ = self.model(data)
                 last_output = output_seq[-1]
-                loss = self.criterion(last_output, target)
+                loss = F.nll_loss(last_output, target, size_average=False).data[0]
+                test_loss += loss
                 pred = last_output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
 
             # In the non-LSTM, use the whole output of the model
@@ -179,7 +184,7 @@ class MyGoogLeNet:
 
             # Update the prediction values
             correct += pred.eq(target.data.view_as(pred)).cpu().sum()
-            
+
             cntr+=1
             if(cntr%1000==0):
                 print('Correct {} at {}'.format(correct,cntr))
@@ -303,4 +308,21 @@ class GoogLeNet(nn.Module):
         else:
             out = out.view(out.size(0), -1)
             out = self.linear(out)
+        return self.softmax(out)
+
+    def getEmbedding(self, x):
+        out = self.pre_layers(x)
+        out = self.a3(out)
+        out = self.b3(out)
+        out = self.maxpool1(out)
+        out = self.a4(out)
+        out = self.b4(out)
+        out = self.c4(out)
+        out = self.d4(out)
+        out = self.e4(out)
+        out = self.maxpool2(out)
+        out = self.a5(out)
+        out = self.b5(out)
+        out = self.avgpool(out)
+        out = out.view(out.size(0), -1)
         return self.softmax(out)

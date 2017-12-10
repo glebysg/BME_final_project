@@ -21,10 +21,12 @@ stream_num = 20
 # batch_size = 1
 
 class MyLSTM:
-    def __init__(self,train_obj_name,test_obj_name,withPreloadModel,withCuda,modelName):
-        self.model = LSTM()
+    def __init__(self,train_obj_name,test_obj_name,withPreloadModel,withCuda,modelName,cnnModelName=None,cnnType='ALEX',init_size=224*224):
+        self.model = LSTM(init_size)
         self.withCuda = withCuda
         self.model_name = 'model/'+modelName
+        self.cnnModelName = cnnModelName
+        self.cnnType = cnnModelName
 
         if(self.withCuda):
             self.model.cuda()
@@ -34,8 +36,12 @@ class MyLSTM:
             print("************ Loading Model ************")
             self.model.load_state_dict(torch.load(self.model_name))
 
-        self.train_loader = DataPool(train_obj_name,stream_num,'LSTM')
-        self.test_loader = DataPool(test_obj_name,stream_num,'LSTM')
+        if self.cnnModelName:
+            self.train_loader = DataPool(train_obj_name,stream_num,self.cnnType+'+LSTM',self.cnnModelName)
+            self.test_loader = DataPool(test_obj_name,stream_num,self.cnnType+'+LSTM',self.cnnModelName)
+        else:
+            self.train_loader = DataPool(train_obj_name,stream_num,'LSTM')
+            self.test_loader = DataPool(test_obj_name,stream_num,'LSTM')
         self.criterion = nn.NLLLoss()
         self.errors = []
         self.epochs = []

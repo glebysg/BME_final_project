@@ -3,6 +3,8 @@ import cv2
 import pickle
 import random
 import numpy as np
+import AlexNet
+import GoogLeNet
 
 
 def load_obj(name):
@@ -11,7 +13,7 @@ def load_obj(name):
 
 class DataPool:
 
-    def __init__(self, name, stream_size, technique='CNN'):
+    def __init__(self, name, stream_size, technique='CNN',modelName='NoModelName'):
         self.obj_name = name
         self.original_stream_size = stream_size
         self.dict_obj = load_obj(name)
@@ -22,6 +24,7 @@ class DataPool:
         self.initialized = False
         self.images_in_video = 20
         self.technique = technique
+        self.modelName = modelName
 
     def restart(self):
         self.dict_obj = load_obj(self.obj_name)
@@ -75,7 +78,30 @@ class DataPool:
                 exit(0)
             self.streams.append((cap,label))
             self.initialized = True
-
+        elif self.technique == 'ALEX+LSTM':
+            cap, label = self.get_one_video()
+            if not cap:
+                print("ERROR: Not enough videos to buid a stream")
+                exit(0)
+            self.streams.append((cap,label))
+            self.initialized = True
+            train_obj_name = 'pkls/trainout'
+            test_obj_name = 'pkls/testout'
+            if self.modelName == 'NoModelName':
+                print("Enter a model name for Alexnet")
+            self.net = AlexNet.MyAlexNet(train_obj_name,test_obj_name,True,True,False,self.modelName)
+        elif self.technique == 'GOOGLENET+LSTM':
+            cap, label = self.get_one_video()
+            if not cap:
+                print("ERROR: Not enough videos to buid a stream")
+                exit(0)
+            self.streams.append((cap,label))
+            self.initialized = True
+            train_obj_name = 'pkls/trainout'
+            test_obj_name = 'pkls/testout'
+            if self.modelName == 'NoModelName':
+                print("Enter a model name for GoogLeNet")
+            self.net = GoogLeNet.MyGoogLeNet(train_obj_name,test_obj_name,True,True,False,self.modelName)
 
     def total_videos(self):
         return self.length
@@ -117,33 +143,29 @@ class DataPool:
             tensor_label = torch.LongTensor(1)
             tensor_label[0] = label-2
             return tensor_frame.float(), tensor_label
-        elif self.technique == 'CNN+LSTM':
-            if not self.initialized:
-                self.initialize_stream()
-                # print(self.streams)
+
+        elif self.technique == 'ALEX+LSTM' or self.technique =='GOOGLENET+LSTM':
+            cap, label = self.get_one_video()
+            if cap is None:
+                return None, None
+            tensor_frame = []
+            tensor_label = torch.LongTensor(1)
+            tensor_label[0] = label-2
             while (True):
-                if len(self.streams) == 0:
-                    new_cap, new_label = self.get_one_video()
-                    if new_cap is None:
-                        return None, None
-                    else:
-                        self.streams.append((new_cap,new_label))
+                ret, frame = cap.read()
+                if not ret:
+                    break
                 else:
-                    cap, label = self.streams[0]
-                    ret, frame = cap.read()
-                    if not ret:
-                        cap.release()
-                        self.streams = []
-                    else:
-                        # Manual Resize
-                        tensor_frame = []
-                        tensor_frame.append((frame[:,:,0] - np.tile(np.mean(frame[:,:,0]), (224,224)))/255.0)
-                        tensor_frame.append((frame[:,:,1] - np.tile(np.mean(frame[:,:,1]), (224,224)))/255.0)
-                        tensor_frame.append((frame[:,:,2] - np.tile(np.mean(frame[:,:,2]), (224,224)))/255.0)
-                        tensor_frame = torch.from_numpy(np.array([tensor_frame]))
-                        tensor_label = torch.LongTensor(1)
-                        tensor_label[0] = label-2
-                        return tensor_frame.float(), tensor_label
+                    cnn_tensor_frame = []
+                    cnn_tensor_frame.append((frame[:,:,0] - np.tile(np.mean(frame[:,:,0]), (224,224)))/255.0)
+                    cnn_tensor_frame.append((frame[:,:,1] - np.tile(np.mean(frame[:,:,1]), (224,224)))/255.0)
+                    cnn_tensor_frame.append((frame[:,:,2] - np.tile(np.mean(frame[:,:,2]), (224,224)))/255.0)
+                    cnn_tensor_frame = torch.from_numpy(np.array([tensor_frame]))
+                    embedding = self.net.getEmbedding(cnn_tensor_frame)
+                    tensor_frame.append(embedding)
+            tensor_frame = torch.from_numpy(np.array(tensor_frame))
+            return tensor_frame.float(), tensor_label
+
         elif self.technique == 'LSTM':
             cap, label = self.get_one_video()
             if cap is None:

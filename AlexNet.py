@@ -21,10 +21,11 @@ stream_num = 20
 # batch_size = 1
 
 class MyAlexNet:
-    def __init__(self,train_obj_name,test_obj_name,withPreloadModel,withCuda,withLSTM):
+    def __init__(self,train_obj_name,test_obj_name,withPreloadModel,withCuda,withLSTM,modelName):
         self.model = AlexNet(withLSTM)
         self.withCuda = withCuda
         self.withLSTM = withLSTM
+        self.model_name = 'model/'+modelName
 
         if(self.withLSTM):
             print("************ Using LSTM ************")
@@ -37,7 +38,7 @@ class MyAlexNet:
         # Load the trained model
         if withPreloadModel:
             print("************ Loading Model ************")
-            self.model.load_state_dict(torch.load('model/AlexNetModelMomentum+LR'))
+            self.model.load_state_dict(torch.load(self.model_name))
 
         # self.train_loader = train_obj_name
         # self.test_loader = test_obj_name
@@ -50,6 +51,9 @@ class MyAlexNet:
         self.accuracies = []
 
         self.optimizer = optim.SGD(self.model.parameters(), initial_learning_rate, momentum)
+
+    def getEmbedding(self,x):
+        return self.model.getEmbedding(x)
 
     def train(self):
         def step_decay(epoch):
@@ -105,7 +109,7 @@ class MyAlexNet:
                     # print(target)
                     # print("TARGEEEEEEETO")
                     # print(target.data[0])
-                    loss = self.criterion(output, target)
+                    loss = self.criterion(output, target.float())
                     # print(loss)
                     pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
                     # print(pred[0], target[0])
@@ -145,7 +149,7 @@ class MyAlexNet:
             self.times.append(time.time() - start_time)
 
         # Save the trained model
-        torch.save(self.model.state_dict(), 'model/AlexNetModelMomentum+LR')
+        torch.save(self.model.state_dict(), self.model_name)
 
         return self.epochs,self.errors,self.times,self.accuracies
 
@@ -177,25 +181,33 @@ class MyAlexNet:
             if(self.withLSTM):
                 output_seq, _ = self.model(data)
                 last_output = output_seq[-1]
-                loss = self.criterion(last_output, target)
+                loss = F.nll_loss(last_output, target, size_average=False).data[0]
+                test_loss += loss
                 pred = last_output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
 
             # In the non-LSTM, use the whole output of the model
             else:
                 output = self.model(data)
-                loss = self.criterion(output, target)
+                loss = F.nll_loss(output, target, size_average=False).data[0]
+                test_loss += loss
                 pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
 
-            # Update the prediction values
-            test_loss += loss.data.cpu().numpy()[0]
+           # Update the prediction values
             correct += pred.eq(target.data.view_as(pred)).cpu().sum()
 
-        # Compute the final loss and the accuracy
-        test_loss /= (self.test_loader.total_videos()*self.test_loader.total_images())
-        accuracy = 100. * correct / (self.test_loader.total_images())
+            cntr+=1
+            if(cntr%1000==0):
+                print('Correct {} at {}'.format(correct,cntr))
+                print('Used Images: {}, Time taken: {}, Loss: {}, Test Acc: {}'.format(cntr,(time.time() - \
+                            start_time),loss,100.*(correct/cntr)))
 
+        # Compute the final loss and the accuracy
+        test_loss /= float(self.test_loader.total_images())
+        accuracy = 100. * correct / float(self.test_loader.total_images())
+
+        print('Correct {} at {}'.format(correct,cntr))
         print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, \
-        self.test_loader.total_images(), accuracy))
+        (self.test_loader.total_images()), accuracy))
 
         return test_loss, accuracy
 
@@ -224,14 +236,16 @@ class AlexNet(nn.Module):
             nn.Linear(256 * 6 * 6, 4096),
             nn.ReLU(inplace=True),
             nn.Dropout(),
-            nn.Linear(4096, 64),
-            nn.ReLU(inplace=True),
-            nn.Linear(64, num_classes),
-            nn.ReLU(inplace=True),
+            nn.Linear(4096, 4096),
+            nn.ReLU(inplace=True)
+           # nn.Linear(4096, 64),
+           # nn.ReLU(inplace=True),
+           #  nn.Linear(64, num_classes),
+           #  nn.ReLU(inplace=True),
         )
 
         # Final linear layer when not using LSTM
-        self.linear = nn.Linear(num_classes, 1)
+        self.linear = nn.Linear(4096, num_classes)
 
         # Final LSTM layer when using LSTM
         self.rnn = nn.LSTM(4096, num_classes, LSTM_hidden_layers)
@@ -252,3 +266,9 @@ class AlexNet(nn.Module):
         # print(self.softmax(x))
         # return self.softmax(x)
         return x
+
+    def getEmbedding(self, x):
+        x = self.features(x)
+        x = x.view(x.size(0), 256 * 6 * 6)
+        x = self.classifier(x)
+        return self.softmax(x)

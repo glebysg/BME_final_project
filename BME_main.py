@@ -12,16 +12,21 @@ import torch.nn as nn
 from torch.autograd import Variable
 plt.switch_backend('agg')
 
-useCNN = True
+useCNN = False
 useGoogLeNet = False
-usePreloadModel = False
+usePreloadModel = True
 isTraining = True
 withCuda = True
-withLSTM = False
+withLSTM = True
 net = []
 train_obj_name = 'pkls/trainout'
 test_obj_name = 'pkls/testout'
-model='AlexNet_Regression'
+model='AlexNet_Regression_SoftMax'
+cnnModelName='GoogLeNetModelLRMomentum'
+cnnType='GOOGLENET'
+googlenet_size = 1024
+alexnet_size = 4096
+lstm_size = 224*224
 #model='LSTM64_LR_Momentum_fold1'
 fignames = 'figures/'+model+'.png'
 
@@ -30,7 +35,7 @@ if(useCNN):
     ##Mock data for CNNs
     print("************ Preparing the data ************")
     ######### Data should be a FloatTensor of dims [1,3,224,224] #########
-    ######### Label should be a FloatTensor of dims [1] #########    
+    ######### Label should be a FloatTensor of dims [1] #########
     ##To be replaced with the frames from the videos
     # train_loader = [[torch.randn(1,3,224,224),torch.randn(1)], [torch.randn(1,3,224,224),torch.randn(1)], \
     # [torch.randn(1,3,224,224),torch.randn(1)], [torch.randn(1,3,224,224),torch.randn(1)]]
@@ -88,8 +93,8 @@ else:
     ###################################
 
     print("************ Using Simple LSTM ************")
-    net = LSTM.MyLSTM(train_obj_name,test_obj_name,usePreloadModel,withCuda,model)
-    net = LSTM.MyLSTM(train_obj_name,test_obj_name,usePreloadModel,withCuda,model)
+    net = LSTM.MyLSTM(train_obj_name,test_obj_name,usePreloadModel,withCuda,model,cnnModelName,cnnType,googlenet_size)
+    # net = LSTM.MyLSTM(train_obj_name,test_obj_name,usePreloadModel,withCuda,model)
     if(isTraining):
         print("************ Training ************")
         ephocs, errors, times, accuracies = net.train()
